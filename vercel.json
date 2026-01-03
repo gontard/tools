@@ -1,6 +1,5 @@
 {
   "cleanUrls": true,
-  "buildCommand": "./build.sh",
   "rewrites": [
     { "source": "/hello-world", "destination": "/hello-world/index.html" },
     { "source": "/hello-api", "destination": "/hello-api/index.html" }

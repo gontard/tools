@@ -1,6 +1,3 @@
-# Generated at build time
-/api/
-
 # Dependencies (per-tool)
 node_modules/
 
