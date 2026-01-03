@@ -1,0 +1,13 @@
+# Generated at build time
+/api/
+
+# Dependencies (per-tool)
+node_modules/
+
+# Vercel
+.vercel/
+
+# Environment
+.env
+.env.local
+.DS_Store
