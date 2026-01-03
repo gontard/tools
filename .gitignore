@@ -1,3 +1,6 @@
+# Generated at build time
+.vercel/output/
+
 # Dependencies (per-tool)
 node_modules/
 

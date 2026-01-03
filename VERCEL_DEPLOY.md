@@ -8,38 +8,55 @@ Automatic Vercel deployments configured for the tools monorepo. Push to `main` t
 
 ```
 tools/
-├── vercel.json              # Routing configuration
+├── vercel.json              # Triggers build.sh
+├── build.sh                 # Generates .vercel/output/ (Build Output API)
 ├── index.html               # Landing page listing all tools
-├── api/                     # Root API folder (Vercel requirement)
-│   └── hello-api/
-│       └── hello.js         # Serverless function
 ├── hello-world/
 │   └── index.html           # Static test page
 └── hello-api/
     ├── index.html           # Frontend with API call button
-    └── package.json         # Tool's own dependencies
+    ├── package.json         # Tool's own dependencies
+    └── api/
+        └── hello.js         # Serverless function source
+```
+
+At deploy time, `build.sh` generates:
+
+```
+.vercel/output/
+├── config.json              # Routes configuration
+├── static/                  # All static files
+│   ├── index.html
+│   ├── hello-world/
+│   └── hello-api/
+└── functions/               # Serverless functions
+    └── api/hello-api/hello.func/
+        ├── index.js
+        └── .vc-config.json
 ```
 
 ## Key Decisions
 
+- **Build Output API**: Full control over deployment structure
+- **Self-contained tools**: Each tool has its own folder with `api/` subfolder for functions
+- **No committed `/api/`**: Functions generated at build time from tool folders
 - **Single Vercel project** for all tools
-- **API functions in root `/api/`**: Vercel requires functions in `/api/` at the root. Functions are organized as `/api/tool-name/function.js`
-- **Self-contained tools**: Each tool has its own folder with frontend and optional `package.json`
 
 ## Adding New Tools
 
 ### Static tool
 1. Create `new-tool/index.html`
-2. Add rewrite to `vercel.json`
+2. Add route to `build.sh` config section
 3. Add card to root `index.html`
 
 ### Tool with backend
 1. Create `new-tool/` with:
    - `index.html` (frontend)
    - `package.json` (dependencies, optional)
-2. Create `api/new-tool/function.js` (serverless function)
-3. Add rewrite to `vercel.json`
-4. Add card to root `index.html`
+   - `api/function.js` (serverless function)
+2. Add route to `build.sh` config section
+3. Add card to root `index.html`
+4. Build script auto-discovers tools with `api/` folders
 
 ## Vercel Setup (One-time)
 
@@ -48,6 +65,7 @@ tools/
 3. Configure:
    - Framework Preset: `Other`
    - Root Directory: `.`
+   - Build Command: `./build.sh` (auto-detected from vercel.json)
 4. Deploy
 
 ## URLs
@@ -57,3 +75,10 @@ After deployment:
 - Static tool: `https://<project>.vercel.app/hello-world`
 - API tool: `https://<project>.vercel.app/hello-api`
 - API endpoint: `https://<project>.vercel.app/api/hello-api/hello`
+
+## Local Testing
+
+```bash
+./build.sh
+# Output in .vercel/output/
+```
