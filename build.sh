@@ -51,7 +51,8 @@ for tool_dir in */; do
 {
   "runtime": "nodejs20.x",
   "handler": "index.js",
-  "launcherType": "Nodejs"
+  "launcherType": "Nodejs",
+  "shouldAddHelpers": true
 }
 VCCONFIG
       fi
