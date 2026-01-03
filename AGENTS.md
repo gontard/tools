@@ -70,7 +70,10 @@ Each tool lives in its own folder with a PLAN.md and implementation files.
 
 **Tools with backend:**
 - Vercel (GitHub integration)
-- Serverless functions in `/api` folder
+- Serverless functions in tool's `api/` subfolder (e.g., `hello-api/api/hello.js`)
+- Build Output API: `build.sh` generates `.vercel/output/` at deploy time
+- Functions use ESM (`export default function handler(req, res)`)
+- See `VERCEL_DEPLOY.md` for details
 
 ## File Naming
 
