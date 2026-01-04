@@ -23,11 +23,11 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 
 ## Steps
 
-- [ ] Step 1: Create package.json with dependencies
-- [ ] Step 2: Implement api/extract.js with JSON-LD extraction
-- [ ] Step 3: Add Microdata fallback to api/extract.js
-- [ ] Step 4: Implement index.html frontend
-- [ ] Step 5: Test with Marmiton and other recipe sites
+- [x] Step 1: Create package.json with dependencies
+- [x] Step 2: Implement api/extract.js with JSON-LD extraction
+- [x] Step 3: Add Microdata fallback to api/extract.js
+- [x] Step 4: Implement index.html frontend
+- [x] Step 5: Test with Marmiton and other recipe sites
 
 ## Specifications
 
