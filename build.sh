@@ -73,6 +73,7 @@ cat > "$OUTPUT_DIR/config.json" << 'CONFIG'
   "routes": [
     { "src": "/hello-world", "dest": "/hello-world/index.html" },
     { "src": "/hello-api", "dest": "/hello-api/index.html" },
+    { "src": "/recipe-viewer", "dest": "/recipe-viewer/index.html" },
     {
       "src": "/api/(.*)",
       "headers": {
