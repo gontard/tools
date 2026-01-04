@@ -42,6 +42,7 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
   "recipe": {
     "title": "Rôti de boeuf au four",
     "description": "A simple roast beef recipe",
+    "image": "https://example.com/photo.jpg",
     "duration": {
       "prep": "5 minutes",
       "cook": "25 minutes",
@@ -69,6 +70,11 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 | TIMEOUT | 504 | Request timed out |
 | FETCH_FAILED | 502 | Could not fetch the page |
 
+**Fetch Configuration:**
+- Timeout: 10 seconds (with AbortController)
+- User-Agent: Spoof browser User-Agent to avoid blocks
+- Example: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36`
+
 **Extraction Strategy:**
 1. Primary: JSON-LD with `@type: "Recipe"` (handles `@graph` containers)
 2. Fallback: Microdata with `itemtype="http://schema.org/Recipe"`
@@ -79,6 +85,8 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 - `findRecipeInJsonLd(data)` - Recursive search handling arrays and @graph
 - `extractMicrodata($)` - Parse itemprop attributes
 - `normalizeRecipe(raw)` - Convert to standard response format
+  - Handles ingredients as strings OR objects with `name`/`amount`
+  - Extracts first image from array if multiple provided
 - `formatDuration(iso)` - Convert "PT5M" to "5 minutes"
 
 ### Frontend: index.html
@@ -88,8 +96,9 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 ┌─────────────────────────────────────────┐
 │  [URL input field]  [Extract button]    │
 ├─────────────────────────────────────────┤
-│  Title                                  │
-│  Prep: 5 min | Cook: 25 min | 2 pers.  │
+│  [Image]  Title                         │
+│           Description text here...      │
+│           Prep: 5 min | Cook: 25 min    │
 ├───────────────────┬─────────────────────┤
 │  Ingredients      │  Steps              │
 │  - 400g beef      │  1. Preheat oven    │
@@ -98,11 +107,17 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 └───────────────────┴─────────────────────┘
 ```
 
-**Layout (Mobile):** Single column - title, meta, ingredients, then steps.
+**Layout (Mobile):** Single column - image, title, description, meta, ingredients, then steps.
+
+**Shareable URLs:**
+- On page load, check for `?url=` query parameter
+- If present, auto-populate input and trigger extraction
+- After successful extraction, update URL with `?url=<encoded-url>` (using `history.replaceState`)
+- Enables bookmarking and sharing extracted recipes
 
 **States:**
 - Empty: Just input field
-- Loading: Button disabled, "Extracting..." text
+- Loading: Button disabled, spinner icon, "Extracting recipe..." text (clear feedback so site doesn't look stuck)
 - Error: Red message with helpful text
 - Success: Recipe displayed
 
@@ -128,7 +143,7 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 ## Testing
 
 - **Marmiton**: https://www.marmiton.org/recettes/recette_roti-de-boeuf-au-four-tout-simple_342546.aspx
-  - Expected: Title "Rôti de boeuf au four tout simple", 7 ingredients, 3 steps
+  - Expected: Title "Rôti de boeuf au four tout simple", image, description, 7 ingredients, 3 steps
 - **Non-recipe URL**: https://www.google.com
   - Expected: Error "No structured recipe data found"
 - **Invalid URL**: "not-a-url"
@@ -136,8 +151,10 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 
 ## Acceptance Criteria
 
-- [ ] Marmiton recipes extract correctly (title, times, servings, ingredients, steps)
+- [ ] Marmiton recipes extract correctly (title, image, description, times, servings, ingredients, steps)
 - [ ] ISO 8601 durations display as human-readable text (PT5M → "5 minutes")
 - [ ] Error messages are clear and helpful
+- [ ] Loading state shows spinner (site never looks stuck)
 - [ ] Layout is responsive (desktop: 2 columns, mobile: 1 column)
+- [ ] Shareable URLs work (copy URL → paste in new tab → same recipe loads)
 - [ ] No external fonts, frameworks, or unnecessary dependencies
