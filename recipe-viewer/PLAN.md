@@ -1,0 +1,143 @@
+# Recipe Viewer
+
+## Goal
+
+Extract and display recipes from any URL in a clean, distraction-free format. Users paste a recipe URL (e.g., from Marmiton) and see only the essential information: title, timing, servings, ingredients, and steps. Designed for use while cooking - no ads, no life stories, just the recipe.
+
+## Architecture
+
+- **Type**: Frontend + Backend
+- **Stack**:
+  - Frontend: Pure HTML5/CSS3/vanilla JS (no frameworks)
+  - Backend: Vercel serverless function (Node.js)
+  - Dependencies: `cheerio` (HTML parsing), `iso8601-duration` (time parsing)
+- **Files**:
+  ```
+  recipe-viewer/
+  ├── PLAN.md
+  ├── index.html
+  ├── package.json
+  └── api/
+      └── extract.js
+  ```
+
+## Steps
+
+- [ ] Step 1: Create package.json with dependencies
+- [ ] Step 2: Implement api/extract.js with JSON-LD extraction
+- [ ] Step 3: Add Microdata fallback to api/extract.js
+- [ ] Step 4: Implement index.html frontend
+- [ ] Step 5: Test with Marmiton and other recipe sites
+
+## Specifications
+
+### Backend: api/extract.js
+
+**Endpoint:** `GET /api/recipe-viewer/extract?url=<encoded-url>`
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "recipe": {
+    "title": "Rôti de boeuf au four",
+    "description": "A simple roast beef recipe",
+    "duration": {
+      "prep": "5 minutes",
+      "cook": "25 minutes",
+      "total": "30 minutes"
+    },
+    "servings": "2 personnes",
+    "ingredients": [
+      "400 g de rôti de boeuf bardé",
+      "1 gousses d'ail"
+    ],
+    "steps": [
+      "Préchauffer le four à 220°C",
+      "Enfourner pour 15 minutes"
+    ]
+  }
+}
+```
+
+**Error Responses:**
+| Code | HTTP | Message |
+|------|------|---------|
+| INVALID_URL | 400 | URL must use HTTP or HTTPS |
+| NO_RECIPE_DATA | 404 | No structured recipe data found |
+| BLOCKED | 403 | Website blocked our request |
+| TIMEOUT | 504 | Request timed out |
+| FETCH_FAILED | 502 | Could not fetch the page |
+
+**Extraction Strategy:**
+1. Primary: JSON-LD with `@type: "Recipe"` (handles `@graph` containers)
+2. Fallback: Microdata with `itemtype="http://schema.org/Recipe"`
+3. No heuristic HTML parsing (too brittle)
+
+**Key Functions:**
+- `extractJsonLd($)` - Find all `<script type="application/ld+json">` blocks
+- `findRecipeInJsonLd(data)` - Recursive search handling arrays and @graph
+- `extractMicrodata($)` - Parse itemprop attributes
+- `normalizeRecipe(raw)` - Convert to standard response format
+- `formatDuration(iso)` - Convert "PT5M" to "5 minutes"
+
+### Frontend: index.html
+
+**Layout (Desktop):**
+```
+┌─────────────────────────────────────────┐
+│  [URL input field]  [Extract button]    │
+├─────────────────────────────────────────┤
+│  Title                                  │
+│  Prep: 5 min | Cook: 25 min | 2 pers.  │
+├───────────────────┬─────────────────────┤
+│  Ingredients      │  Steps              │
+│  - 400g beef      │  1. Preheat oven    │
+│  - 1 garlic       │  2. Roast 15 min    │
+│  - 2 tbsp oil     │  3. Season and rest │
+└───────────────────┴─────────────────────┘
+```
+
+**Layout (Mobile):** Single column - title, meta, ingredients, then steps.
+
+**States:**
+- Empty: Just input field
+- Loading: Button disabled, "Extracting..." text
+- Error: Red message with helpful text
+- Success: Recipe displayed
+
+**Styling:**
+- CSS custom properties for colors
+- System font stack
+- Max-width container (800px)
+- Grid layout for ingredients/steps
+- Mobile breakpoint at 600px
+
+### Dependencies (package.json)
+
+```json
+{
+  "type": "module",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "iso8601-duration": "^2.1.2"
+  }
+}
+```
+
+## Testing
+
+- **Marmiton**: https://www.marmiton.org/recettes/recette_roti-de-boeuf-au-four-tout-simple_342546.aspx
+  - Expected: Title "Rôti de boeuf au four tout simple", 7 ingredients, 3 steps
+- **Non-recipe URL**: https://www.google.com
+  - Expected: Error "No structured recipe data found"
+- **Invalid URL**: "not-a-url"
+  - Expected: Error "URL must use HTTP or HTTPS"
+
+## Acceptance Criteria
+
+- [ ] Marmiton recipes extract correctly (title, times, servings, ingredients, steps)
+- [ ] ISO 8601 durations display as human-readable text (PT5M → "5 minutes")
+- [ ] Error messages are clear and helpful
+- [ ] Layout is responsive (desktop: 2 columns, mobile: 1 column)
+- [ ] No external fonts, frameworks, or unnecessary dependencies
