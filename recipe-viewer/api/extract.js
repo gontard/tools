@@ -54,6 +54,64 @@ function findRecipeInJsonLd(data) {
 }
 
 /**
+ * Extract recipe from Microdata (schema.org/Recipe)
+ * Fallback when JSON-LD is not available
+ */
+function extractMicrodata($) {
+  const recipeEl = $('[itemtype*="schema.org/Recipe"]');
+  if (recipeEl.length === 0) return null;
+
+  const getItemprop = (prop) => {
+    const el = recipeEl.find(`[itemprop="${prop}"]`).first();
+    if (el.length === 0) return null;
+    return (
+      el.attr("content") ||
+      el.attr("datetime") ||
+      el.attr("src") ||
+      el.attr("href") ||
+      el.text().trim() ||
+      null
+    );
+  };
+
+  const getAllItemprop = (prop) => {
+    const values = [];
+    recipeEl.find(`[itemprop="${prop}"]`).each((_, el) => {
+      const $el = $(el);
+      const value =
+        $el.attr("content") ||
+        $el.attr("datetime") ||
+        $el.text().trim();
+      if (value) values.push(value);
+    });
+    return values;
+  };
+
+  // Get image - might be in img src or content attribute
+  const imageEl = recipeEl.find('[itemprop="image"]').first();
+  let image = null;
+  if (imageEl.length) {
+    image =
+      imageEl.attr("src") ||
+      imageEl.attr("content") ||
+      imageEl.attr("href") ||
+      null;
+  }
+
+  return {
+    name: getItemprop("name"),
+    description: getItemprop("description"),
+    image,
+    prepTime: getItemprop("prepTime"),
+    cookTime: getItemprop("cookTime"),
+    totalTime: getItemprop("totalTime"),
+    recipeYield: getItemprop("recipeYield"),
+    recipeIngredient: getAllItemprop("recipeIngredient"),
+    recipeInstructions: getAllItemprop("recipeInstructions"),
+  };
+}
+
+/**
  * Format ISO 8601 duration to human-readable string
  * e.g., "PT5M" -> "5 minutes", "PT1H30M" -> "1 hour 30 minutes"
  */
@@ -255,14 +313,20 @@ export default async function handler(req, res) {
     });
   }
 
-  // Parse HTML and extract JSON-LD
+  // Parse HTML and extract recipe data
   const $ = cheerio.load(html);
-  const jsonLdBlocks = extractJsonLd($);
 
+  // Try JSON-LD first (primary method)
+  const jsonLdBlocks = extractJsonLd($);
   let recipe = null;
   for (const block of jsonLdBlocks) {
     recipe = findRecipeInJsonLd(block);
     if (recipe) break;
+  }
+
+  // Fall back to Microdata if no JSON-LD found
+  if (!recipe) {
+    recipe = extractMicrodata($);
   }
 
   if (!recipe) {
