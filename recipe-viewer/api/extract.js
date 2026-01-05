@@ -139,10 +139,42 @@ function formatDuration(iso) {
 }
 
 /**
- * Normalize ingredient to string
+ * Extract numeric serving count from servings string
+ * e.g., "2 personnes" -> 2, "4 servings" -> 4
+ */
+function parseServings(str) {
+  if (!str) return null;
+  if (typeof str === "number") return str;
+  const match = String(str).match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Parse ingredient string into structured format
+ * e.g., "400 g de boeuf" -> { raw, quantity: 400, unit: "g", name: "de boeuf" }
+ */
+function parseIngredient(str) {
+  const raw = str;
+  // Match: optional quantity (with decimals/fractions), optional unit, rest is name
+  // Pattern: start, number (with optional decimal), optional unit letters, rest
+  const match = str.match(/^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?\s*(.*)$/);
+
+  if (match) {
+    const quantity = parseFloat(match[1].replace(",", "."));
+    const unit = match[2] || null;
+    const name = match[3] || "";
+    return { raw, quantity, unit, name: name.trim() };
+  }
+
+  // No quantity found - return unparseable ingredient
+  return { raw, quantity: null, unit: null, name: str };
+}
+
+/**
+ * Normalize ingredient to string (for internal use)
  * Handles both string and object formats
  */
-function normalizeIngredient(ingredient) {
+function ingredientToString(ingredient) {
   if (typeof ingredient === "string") {
     return ingredient;
   }
@@ -193,9 +225,11 @@ function extractImage(image) {
  * Normalize raw recipe data to standard format
  */
 function normalizeRecipe(raw) {
-  const ingredients = Array.isArray(raw.recipeIngredient)
-    ? raw.recipeIngredient.map(normalizeIngredient)
+  // Convert ingredients to strings first, then parse for quantities
+  const ingredientStrings = Array.isArray(raw.recipeIngredient)
+    ? raw.recipeIngredient.map(ingredientToString)
     : [];
+  const ingredients = ingredientStrings.map(parseIngredient);
 
   const steps = Array.isArray(raw.recipeInstructions)
     ? raw.recipeInstructions.map(normalizeStep)
@@ -213,6 +247,8 @@ function normalizeRecipe(raw) {
     }
   }
 
+  const servingsCount = parseServings(servings);
+
   return {
     title: raw.name || null,
     description: raw.description || null,
@@ -223,6 +259,7 @@ function normalizeRecipe(raw) {
       total: formatDuration(raw.totalTime),
     },
     servings,
+    servingsCount,
     ingredients,
     steps,
   };

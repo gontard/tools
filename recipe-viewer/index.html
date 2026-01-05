@@ -207,6 +207,53 @@
       border-bottom: none;
     }
 
+    /* Serving selector */
+    .serving-selector {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .serving-selector button {
+      width: 2rem;
+      height: 2rem;
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      border-radius: var(--radius);
+      font-size: 1.25rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-text);
+    }
+
+    .serving-selector button:hover:not(:disabled) {
+      background: var(--color-bg);
+      border-color: var(--color-primary);
+    }
+
+    .serving-selector button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .serving-selector .serving-count {
+      min-width: 3rem;
+      text-align: center;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .serving-selector .serving-label {
+      color: var(--color-text-secondary);
+      font-size: 0.9rem;
+    }
+
     .steps-list {
       list-style: none;
       counter-reset: step;
@@ -311,6 +358,12 @@
       <div class="recipe-content">
         <section class="recipe-section">
           <h2>Ingredients</h2>
+          <div id="serving-selector" class="serving-selector hidden">
+            <button type="button" id="serving-decrease" aria-label="Decrease servings">−</button>
+            <span id="serving-count" class="serving-count"></span>
+            <button type="button" id="serving-increase" aria-label="Increase servings">+</button>
+            <span class="serving-label">servings</span>
+          </div>
           <ul id="ingredients-list" class="ingredients-list"></ul>
         </section>
         <section class="recipe-section">
@@ -329,13 +382,23 @@
     const btnSpinner = document.getElementById('btn-spinner');
     const errorDiv = document.getElementById('error');
     const recipeArticle = document.getElementById('recipe');
+    const servingSelector = document.getElementById('serving-selector');
+    const servingCountEl = document.getElementById('serving-count');
+    const servingDecrease = document.getElementById('serving-decrease');
+    const servingIncrease = document.getElementById('serving-increase');
 
-    // Check for URL parameter on page load
+    // State for serving adjustment
+    let currentRecipe = null;
+    let originalServings = null;
+    let currentServings = null;
+
+    // Check for URL parameters on page load
     const params = new URLSearchParams(window.location.search);
     const initialUrl = params.get('url');
+    const initialServings = params.get('servings');
     if (initialUrl) {
       urlInput.value = initialUrl;
-      extractRecipe(initialUrl);
+      extractRecipe(initialUrl, initialServings ? parseInt(initialServings, 10) : null);
     }
 
     form.addEventListener('submit', async (e) => {
@@ -346,7 +409,37 @@
       }
     });
 
-    async function extractRecipe(url) {
+    // Serving selector event listeners
+    servingDecrease.addEventListener('click', () => adjustServings(-1));
+    servingIncrease.addEventListener('click', () => adjustServings(1));
+
+    function adjustServings(delta) {
+      const newServings = currentServings + delta;
+      if (newServings >= 1 && newServings <= 99) {
+        currentServings = newServings;
+        updateServingDisplay();
+        renderIngredients();
+        updateUrlWithServings();
+      }
+    }
+
+    function updateServingDisplay() {
+      servingCountEl.textContent = currentServings;
+      servingDecrease.disabled = currentServings <= 1;
+      servingIncrease.disabled = currentServings >= 99;
+    }
+
+    function updateUrlWithServings() {
+      const newUrl = new URL(window.location);
+      if (currentServings !== originalServings) {
+        newUrl.searchParams.set('servings', currentServings);
+      } else {
+        newUrl.searchParams.delete('servings');
+      }
+      history.replaceState(null, '', newUrl);
+    }
+
+    async function extractRecipe(url, requestedServings = null) {
       // Set loading state
       setLoading(true);
       hideError();
@@ -361,11 +454,19 @@
           return;
         }
 
+        // Store recipe data for serving adjustments
+        currentRecipe = data.recipe;
+        originalServings = data.recipe.servingsCount || null;
+        currentServings = requestedServings || originalServings || 1;
+
         displayRecipe(data.recipe);
 
         // Update URL for sharing
         const newUrl = new URL(window.location);
         newUrl.searchParams.set('url', url);
+        if (requestedServings && requestedServings !== originalServings) {
+          newUrl.searchParams.set('servings', requestedServings);
+        }
         history.replaceState(null, '', newUrl);
       } catch (err) {
         showError('Network error. Please try again.');
@@ -429,15 +530,21 @@
       if (recipe.duration?.total) {
         metaEl.innerHTML += `<span>Total: ${recipe.duration.total}</span>`;
       }
-      if (recipe.servings) {
-        metaEl.innerHTML += `<span>Servings: ${recipe.servings}</span>`;
+
+      // Serving selector (show if we have a servings count)
+      if (originalServings) {
+        updateServingDisplay();
+        servingSelector.classList.remove('hidden');
+      } else {
+        servingSelector.classList.add('hidden');
+        // Show original servings text in meta if available
+        if (recipe.servings) {
+          metaEl.innerHTML += `<span>Servings: ${recipe.servings}</span>`;
+        }
       }
 
       // Ingredients
-      const ingredientsList = document.getElementById('ingredients-list');
-      ingredientsList.innerHTML = recipe.ingredients
-        .map(ing => `<li>${escapeHtml(ing)}</li>`)
-        .join('');
+      renderIngredients();
 
       // Steps
       const stepsList = document.getElementById('steps-list');
@@ -446,6 +553,49 @@
         .join('');
 
       recipeArticle.classList.remove('hidden');
+    }
+
+    function renderIngredients() {
+      if (!currentRecipe) return;
+
+      const ingredientsList = document.getElementById('ingredients-list');
+      const scaleFactor = originalServings ? currentServings / originalServings : 1;
+
+      ingredientsList.innerHTML = currentRecipe.ingredients
+        .map(ing => {
+          const displayText = formatIngredient(ing, scaleFactor);
+          return `<li>${escapeHtml(displayText)}</li>`;
+        })
+        .join('');
+    }
+
+    function formatIngredient(ing, scaleFactor) {
+      // If ingredient has no parseable quantity, return raw text
+      if (ing.quantity === null) {
+        return ing.raw;
+      }
+
+      // Scale the quantity
+      const scaledQty = ing.quantity * scaleFactor;
+
+      // Format the quantity nicely
+      const formattedQty = formatQuantity(scaledQty);
+
+      // Rebuild the ingredient string
+      if (ing.unit) {
+        return `${formattedQty} ${ing.unit} ${ing.name}`.trim();
+      }
+      return `${formattedQty} ${ing.name}`.trim();
+    }
+
+    function formatQuantity(qty) {
+      // Whole numbers: display as-is
+      if (Number.isInteger(qty)) {
+        return qty.toString();
+      }
+      // Round to 1 decimal place, remove trailing zeros
+      const rounded = Math.round(qty * 10) / 10;
+      return rounded.toString();
     }
 
     function escapeHtml(text) {
