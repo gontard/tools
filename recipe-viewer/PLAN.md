@@ -2,7 +2,7 @@
 
 ## Goal
 
-Extract and display recipes from any URL in a clean, distraction-free format. Users paste a recipe URL (e.g., from Marmiton) and see only the essential information: title, timing, servings, ingredients, and steps. Designed for use while cooking - no ads, no life stories, just the recipe.
+Extract and display recipes from any URL in a clean, distraction-free format. Users paste a recipe URL (e.g., from Marmiton) and see only the essential information: title, timing, servings, ingredients, and steps. Users can adjust the serving count to scale ingredient quantities. Designed for use while cooking - no ads, no life stories, just the recipe.
 
 ## Architecture
 
@@ -28,6 +28,7 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 - [x] Step 3: Add Microdata fallback to api/extract.js
 - [x] Step 4: Implement index.html frontend
 - [x] Step 5: Test with Marmiton and other recipe sites
+- [ ] Step 6: Add configurable servings with ingredient scaling
 
 ## Specifications
 
@@ -49,9 +50,10 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
       "total": "30 minutes"
     },
     "servings": "2 personnes",
+    "servingsCount": 2,
     "ingredients": [
-      "400 g de rôti de boeuf bardé",
-      "1 gousses d'ail"
+      { "raw": "400 g de rôti de boeuf bardé", "quantity": 400, "unit": "g", "name": "rôti de boeuf bardé" },
+      { "raw": "1 gousses d'ail", "quantity": 1, "unit": null, "name": "gousses d'ail" }
     ],
     "steps": [
       "Préchauffer le four à 220°C",
@@ -88,6 +90,10 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
   - Handles ingredients as strings OR objects with `name`/`amount`
   - Extracts first image from array if multiple provided
 - `formatDuration(iso)` - Convert "PT5M" to "5 minutes"
+- `parseServings(str)` - Extract numeric count from "2 personnes" → 2
+- `parseIngredient(str)` - Parse "400 g de boeuf" → `{ raw, quantity, unit, name }`
+  - Regex pattern: `^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?\s*(.+)$`
+  - Returns `{ raw: str, quantity: null, unit: null, name: str }` if parsing fails
 
 ### Frontend: index.html
 
@@ -101,13 +107,25 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 │           Prep: 5 min | Cook: 25 min    │
 ├───────────────────┬─────────────────────┤
 │  Ingredients      │  Steps              │
-│  - 400g beef      │  1. Preheat oven    │
-│  - 1 garlic       │  2. Roast 15 min    │
-│  - 2 tbsp oil     │  3. Season and rest │
+│  [-] 2 [+] serv.  │  1. Preheat oven    │
+│  - 400g beef      │  2. Roast 15 min    │
+│  - 1 garlic       │  3. Season and rest │
+│  - 2 tbsp oil     │                     │
 └───────────────────┴─────────────────────┘
 ```
 
 **Layout (Mobile):** Single column - image, title, description, meta, ingredients, then steps.
+
+**Configurable Servings:**
+- Display serving selector above ingredients list: `[-] 2 [+] servings`
+- Buttons increment/decrement serving count (min: 1, max: 99)
+- Ingredient quantities scale proportionally: `newQty = originalQty × (newServings / originalServings)`
+- Display scaled quantities with smart formatting:
+  - Whole numbers: display as-is (e.g., "2")
+  - Decimals: round to 1 decimal place, trim trailing zeros (e.g., "1.5", not "1.50")
+  - Fractions near common values: consider ½, ¼, ¾ display (optional enhancement)
+- Ingredients without parseable quantities show original text (no scaling)
+- Persist selected servings in URL: `?url=...&servings=4`
 
 **Shareable URLs:**
 - On page load, check for `?url=` query parameter
@@ -148,6 +166,10 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
   - Expected: Error "No structured recipe data found"
 - **Invalid URL**: "not-a-url"
   - Expected: Error "URL must use HTTP or HTTPS"
+- **Serving scaling**: Load Marmiton recipe (2 servings), change to 4 servings
+  - Expected: "400 g de rôti" → "800 g de rôti", "1 gousses d'ail" → "2 gousses d'ail"
+- **Shareable scaled recipe**: Copy URL with `?url=...&servings=4`, paste in new tab
+  - Expected: Recipe loads with 4 servings pre-selected and scaled quantities
 
 ## Acceptance Criteria
 
@@ -158,3 +180,6 @@ Extract and display recipes from any URL in a clean, distraction-free format. Us
 - [ ] Layout is responsive (desktop: 2 columns, mobile: 1 column)
 - [ ] Shareable URLs work (copy URL → paste in new tab → same recipe loads)
 - [ ] No external fonts, frameworks, or unnecessary dependencies
+- [ ] Serving selector adjusts ingredient quantities proportionally
+- [ ] Scaled quantities display cleanly (no excessive decimals)
+- [ ] Servings persist in URL for sharing scaled recipes
