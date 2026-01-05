@@ -139,10 +139,57 @@ function formatDuration(iso) {
 }
 
 /**
- * Normalize ingredient to string
+ * Extract numeric serving count from servings string
+ * e.g., "2 personnes" -> 2, "4 servings" -> 4
+ */
+function parseServings(str) {
+  if (!str) return null;
+  if (typeof str === "number") return str;
+  const match = String(str).match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Parse ingredient string into structured format
+ * e.g., "400 g de boeuf" -> { raw, quantity: 400, unit: "g", name: "de boeuf" }
+ */
+function parseIngredient(str) {
+  const raw = str;
+
+  // Common units to recognize (including French)
+  const unitPattern = /^(g|kg|ml|cl|l|oz|lb|cup|cups|tbsp|tsp|cuillères?\s+à\s+(?:soupe|café)|c\.\s*à\s*[sc]|cs|cc|pincée|sachet|tranche|gousse|brin|feuille)s?\b/i;
+
+  // Match: quantity (with decimals), optional unit, rest is name
+  const match = str.match(/^(\d+(?:[.,]\d+)?)\s*/);
+
+  if (match) {
+    const quantity = parseFloat(match[1].replace(",", "."));
+    const rest = str.slice(match[0].length);
+
+    // Try to match a known unit
+    const unitMatch = rest.match(unitPattern);
+    if (unitMatch) {
+      const unit = unitMatch[0].trim();
+      const name = rest.slice(unitMatch[0].length).trim();
+      // Remove leading "de ", "d'" from name
+      const cleanName = name.replace(/^d[e']?\s*/i, "").trim();
+      return { raw, quantity, unit, name: cleanName || name };
+    }
+
+    // No known unit - check if it's a simple "number + name" pattern
+    // e.g., "1 oignon" or "2 tomates"
+    return { raw, quantity, unit: null, name: rest.trim() };
+  }
+
+  // No quantity found - return unparseable ingredient
+  return { raw, quantity: null, unit: null, name: str };
+}
+
+/**
+ * Normalize ingredient to string (for internal use)
  * Handles both string and object formats
  */
-function normalizeIngredient(ingredient) {
+function ingredientToString(ingredient) {
   if (typeof ingredient === "string") {
     return ingredient;
   }
@@ -193,9 +240,11 @@ function extractImage(image) {
  * Normalize raw recipe data to standard format
  */
 function normalizeRecipe(raw) {
-  const ingredients = Array.isArray(raw.recipeIngredient)
-    ? raw.recipeIngredient.map(normalizeIngredient)
+  // Convert ingredients to strings first, then parse for quantities
+  const ingredientStrings = Array.isArray(raw.recipeIngredient)
+    ? raw.recipeIngredient.map(ingredientToString)
     : [];
+  const ingredients = ingredientStrings.map(parseIngredient);
 
   const steps = Array.isArray(raw.recipeInstructions)
     ? raw.recipeInstructions.map(normalizeStep)
@@ -213,6 +262,8 @@ function normalizeRecipe(raw) {
     }
   }
 
+  const servingsCount = parseServings(servings);
+
   return {
     title: raw.name || null,
     description: raw.description || null,
@@ -223,6 +274,7 @@ function normalizeRecipe(raw) {
       total: formatDuration(raw.totalTime),
     },
     servings,
+    servingsCount,
     ingredients,
     steps,
   };
