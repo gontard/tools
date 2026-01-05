@@ -4,6 +4,14 @@ set -e
 # Build Output API structure
 # https://vercel.com/docs/build-output-api/v3
 
+# Run tests for tools that have them
+for tool_dir in */; do
+  if [ -f "$tool_dir/package.json" ] && grep -q '"test"' "$tool_dir/package.json"; then
+    echo "Running tests for ${tool_dir%/}..."
+    (cd "$tool_dir" && npm install && npm test)
+  fi
+done
+
 OUTPUT_DIR=".vercel/output"
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/static"
@@ -40,6 +48,11 @@ for tool_dir in */; do
 
         # Copy the function file
         cp "$api_file" "$func_dir/index.js"
+
+        # Copy lib/ folder if it exists (for local imports)
+        if [ -d "$tool_dir/lib" ]; then
+          cp -r "$tool_dir/lib" "$func_dir/"
+        fi
 
         # Copy node_modules if they exist
         if [ -d "$tool_dir/node_modules" ]; then
