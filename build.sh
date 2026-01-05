@@ -4,6 +4,14 @@ set -e
 # Build Output API structure
 # https://vercel.com/docs/build-output-api/v3
 
+# Run tests for tools that have them
+for tool_dir in */; do
+  if [ -f "$tool_dir/package.json" ] && grep -q '"test"' "$tool_dir/package.json"; then
+    echo "Running tests for ${tool_dir%/}..."
+    (cd "$tool_dir" && npm install && npm test)
+  fi
+done
+
 OUTPUT_DIR=".vercel/output"
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/static"
