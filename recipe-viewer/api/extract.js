@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { parse as parseDuration, toSeconds } from "iso8601-duration";
+import { parseIngredient } from "../lib/parseIngredient.js";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -149,41 +150,6 @@ function parseServings(str) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-/**
- * Parse ingredient string into structured format
- * e.g., "400 g de boeuf" -> { raw, quantity: 400, unit: "g", name: "de boeuf" }
- */
-function parseIngredient(str) {
-  const raw = str;
-
-  // Common units to recognize (including French)
-  const unitPattern = /^(g|kg|ml|cl|l|oz|lb|cup|cups|tbsp|tsp|cuillères?\s+à\s+(?:soupe|café)|c\.\s*à\s*[sc]|cs|cc|pincée|sachet|tranche|gousse|brin|feuille)s?\b/i;
-
-  // Match: quantity (with decimals), optional unit, rest is name
-  const match = str.match(/^(\d+(?:[.,]\d+)?)\s*/);
-
-  if (match) {
-    const quantity = parseFloat(match[1].replace(",", "."));
-    const rest = str.slice(match[0].length);
-
-    // Try to match a known unit
-    const unitMatch = rest.match(unitPattern);
-    if (unitMatch) {
-      const unit = unitMatch[0].trim();
-      const name = rest.slice(unitMatch[0].length).trim();
-      // Remove leading "de ", "d'" from name
-      const cleanName = name.replace(/^d[e']?\s*/i, "").trim();
-      return { raw, quantity, unit, name: cleanName || name };
-    }
-
-    // No known unit - check if it's a simple "number + name" pattern
-    // e.g., "1 oignon" or "2 tomates"
-    return { raw, quantity, unit: null, name: rest.trim() };
-  }
-
-  // No quantity found - return unparseable ingredient
-  return { raw, quantity: null, unit: null, name: str };
-}
 
 /**
  * Normalize ingredient to string (for internal use)

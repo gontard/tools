@@ -7,9 +7,9 @@
 export function parseIngredient(str) {
   const raw = str;
 
-  // Common units to recognize (including French)
+  // Common units to recognize (including French, with full words)
   const unitPattern =
-    /^(g|kg|ml|cl|l|oz|lb|cup|cups|tbsp|tsp|cuillères?\s+à\s+(?:soupe|café)|c\.\s*à\s*[sc]|cs|cc|pincée|sachet|tranche|gousse|brin|feuille)s?\b/i;
+    /^(grammes?|kilogrammes?|litres?|millilitres?|centilitres?|g|kg|ml|cl|l|oz|lb|cup|cups|tbsp|tsp|cuillères?\s+à\s+(?:soupe|café)|c\.\s*à\s*[sc]|cs|cc|pincée|sachet|tranche|gousse|brin|feuille)s?\b/i;
 
   // Match: quantity (with decimals), optional unit, rest is name
   const match = str.match(/^(\d+(?:[.,]\d+)?)\s*/);
@@ -31,6 +31,23 @@ export function parseIngredient(str) {
     // No known unit - check if it's a simple "number + name" pattern
     // e.g., "1 oignon" or "2 tomates"
     return { raw, quantity, unit: null, name: rest.trim() };
+  }
+
+  // Try inverted format: "Name - Quantity Unit" (e.g., "Oignons - 50 grammes")
+  const invertedMatch = str.match(/^(.+?)\s+-\s+(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if (invertedMatch) {
+    const name = invertedMatch[1].trim();
+    const quantity = parseFloat(invertedMatch[2].replace(",", "."));
+    const unitPart = invertedMatch[3].trim();
+
+    // Try to match a known unit in the remaining part
+    const unitMatch = unitPart.match(unitPattern);
+    if (unitMatch) {
+      return { raw, quantity, unit: unitMatch[0].trim(), name };
+    }
+
+    // No unit found (e.g., "Gousse d'ail - 1")
+    return { raw, quantity, unit: null, name };
   }
 
   // No quantity found - return unparseable ingredient
