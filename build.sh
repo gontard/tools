@@ -49,6 +49,11 @@ for tool_dir in */; do
         # Copy the function file
         cp "$api_file" "$func_dir/index.js"
 
+        # Copy lib/ folder if it exists (for local imports)
+        if [ -d "$tool_dir/lib" ]; then
+          cp -r "$tool_dir/lib" "$func_dir/"
+        fi
+
         # Copy node_modules if they exist
         if [ -d "$tool_dir/node_modules" ]; then
           cp -r "$tool_dir/node_modules" "$func_dir/"

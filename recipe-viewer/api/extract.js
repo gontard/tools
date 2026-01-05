@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import { parse as parseDuration, toSeconds } from "iso8601-duration";
-import { parseIngredient } from "../lib/parseIngredient.js";
+import { parseIngredient } from "./lib/parseIngredient.js";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
