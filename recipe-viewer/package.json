@@ -2,7 +2,9 @@
   "name": "recipe-viewer",
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run --exclude 'e2e/**'",
+    "test:e2e": "vitest run e2e/",
+    "test:all": "vitest run"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
