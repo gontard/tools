@@ -3,6 +3,16 @@ import { describe, test, expect } from 'vitest';
 const BASE_URL =
   process.env.E2E_BASE_URL || 'https://tools-wheat-two.vercel.app';
 const API_ENDPOINT = `${BASE_URL}/api/recipe-viewer/extract`;
+const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+
+// Helper to add bypass header for protected deployments
+function fetchWithBypass(url, options = {}) {
+  const headers = { ...options.headers };
+  if (BYPASS_SECRET) {
+    headers['x-vercel-protection-bypass'] = BYPASS_SECRET;
+  }
+  return fetch(url, { ...options, headers });
+}
 
 // Stable test recipe (popular, unlikely to be removed)
 const TEST_RECIPE_URL =
@@ -11,7 +21,7 @@ const TEST_RECIPE_URL =
 describe('Recipe Viewer API - E2E', () => {
   describe('Happy path', () => {
     test('extracts recipe from Marmiton URL', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent(TEST_RECIPE_URL)}`
       );
       const data = await response.json();
@@ -27,7 +37,7 @@ describe('Recipe Viewer API - E2E', () => {
     });
 
     test('response includes all expected fields', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent(TEST_RECIPE_URL)}`
       );
       const data = await response.json();
@@ -39,7 +49,7 @@ describe('Recipe Viewer API - E2E', () => {
     });
 
     test('ingredients have parsed structure', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent(TEST_RECIPE_URL)}`
       );
       const data = await response.json();
@@ -57,7 +67,7 @@ describe('Recipe Viewer API - E2E', () => {
 
   describe('Error handling', () => {
     test('returns 400 for missing URL parameter', async () => {
-      const response = await fetch(API_ENDPOINT);
+      const response = await fetchWithBypass(API_ENDPOINT);
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -66,7 +76,9 @@ describe('Recipe Viewer API - E2E', () => {
     });
 
     test('returns 400 for invalid URL', async () => {
-      const response = await fetch(`${API_ENDPOINT}?url=not-a-valid-url`);
+      const response = await fetchWithBypass(
+        `${API_ENDPOINT}?url=not-a-valid-url`
+      );
       const data = await response.json();
 
       expect(response.status).toBe(400);
@@ -75,7 +87,7 @@ describe('Recipe Viewer API - E2E', () => {
     });
 
     test('returns 404 for non-recipe page', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent('https://www.google.com')}`
       );
       const data = await response.json();
@@ -88,7 +100,7 @@ describe('Recipe Viewer API - E2E', () => {
 
   describe('CORS', () => {
     test('includes CORS headers in response', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent(TEST_RECIPE_URL)}`
       );
 
@@ -98,7 +110,7 @@ describe('Recipe Viewer API - E2E', () => {
 
   describe('Content type', () => {
     test('returns JSON content type', async () => {
-      const response = await fetch(
+      const response = await fetchWithBypass(
         `${API_ENDPOINT}?url=${encodeURIComponent(TEST_RECIPE_URL)}`
       );
 
