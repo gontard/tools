@@ -1,0 +1,31 @@
+name: E2E Tests
+
+on:
+  deployment_status:
+
+jobs:
+  run-e2es:
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'recipe-viewer/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: recipe-viewer
+        run: npm ci
+
+      - name: Run E2E tests
+        working-directory: recipe-viewer
+        run: npm run test:e2e
+        env:
+          E2E_BASE_URL: ${{ github.event.deployment_status.target_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
