@@ -1,18 +1,16 @@
 name: E2E Tests
 
 on:
-  repository_dispatch:
-    types:
-      - 'vercel.deployment.success'
+  deployment_status:
 
 jobs:
   run-e2es:
-    if: github.event_name == 'repository_dispatch'
+    if: github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.client_payload.git.sha }}
+          ref: ${{ github.event.deployment.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,4 +27,4 @@ jobs:
         working-directory: recipe-viewer
         run: npm run test:e2e
         env:
-          E2E_BASE_URL: ${{ github.event.client_payload.url }}
+          E2E_BASE_URL: ${{ github.event.deployment_status.target_url }}
