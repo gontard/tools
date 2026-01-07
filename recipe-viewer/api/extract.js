@@ -2,8 +2,13 @@ import * as cheerio from "cheerio";
 import { parse as parseDuration, toSeconds } from "iso8601-duration";
 import { parseIngredient } from "./lib/parseIngredient.js";
 
+// Constants
+const FETCH_TIMEOUT_MS = 10000;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const ACCEPT_HEADER =
+  "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+const ACCEPT_LANGUAGE = "en-US,en;q=0.5";
 
 /**
  * Extract all JSON-LD blocks from the page
@@ -203,32 +208,30 @@ function extractImage(image) {
 }
 
 /**
+ * Normalize ingredients from raw recipe data
+ * @param {Array} rawIngredients - Raw ingredient list
+ * @returns {Array} - Parsed ingredients with quantity, unit, name
+ */
+function normalizeIngredients(rawIngredients) {
+  if (!Array.isArray(rawIngredients)) return [];
+  return rawIngredients.map(ingredientToString).map(parseIngredient);
+}
+
+/**
+ * Normalize steps from raw recipe data
+ * @param {Array} rawInstructions - Raw instructions list
+ * @returns {Array} - Normalized step strings
+ */
+function normalizeSteps(rawInstructions) {
+  if (!Array.isArray(rawInstructions)) return [];
+  return rawInstructions.map(normalizeStep);
+}
+
+/**
  * Normalize raw recipe data to standard format
  */
 function normalizeRecipe(raw) {
-  // Convert ingredients to strings first, then parse for quantities
-  const ingredientStrings = Array.isArray(raw.recipeIngredient)
-    ? raw.recipeIngredient.map(ingredientToString)
-    : [];
-  const ingredients = ingredientStrings.map(parseIngredient);
-
-  const steps = Array.isArray(raw.recipeInstructions)
-    ? raw.recipeInstructions.map(normalizeStep)
-    : [];
-
-  // Handle servings - can be string or object
-  let servings = null;
-  if (raw.recipeYield) {
-    if (typeof raw.recipeYield === "string") {
-      servings = raw.recipeYield;
-    } else if (Array.isArray(raw.recipeYield)) {
-      servings = raw.recipeYield[0];
-    } else if (typeof raw.recipeYield === "number") {
-      servings = `${raw.recipeYield} servings`;
-    }
-  }
-
-  const servingsCount = parseServings(servings);
+  const servings = normalizeServings(raw.recipeYield);
 
   return {
     title: raw.name || null,
@@ -240,60 +243,27 @@ function normalizeRecipe(raw) {
       total: formatDuration(raw.totalTime),
     },
     servings,
-    servingsCount,
-    ingredients,
-    steps,
+    servingsCount: parseServings(servings),
+    ingredients: normalizeIngredients(raw.recipeIngredient),
+    steps: normalizeSteps(raw.recipeInstructions),
   };
 }
 
-export default async function handler(req, res) {
-  // Only allow GET requests
-  if (req.method !== "GET") {
-    return res.status(405).json({
-      success: false,
-      error: { code: "METHOD_NOT_ALLOWED", message: "Only GET requests allowed" },
-    });
-  }
+/**
+ * Fetch HTML content from URL with timeout and content-type validation
+ * @param {string} url - URL to fetch
+ * @returns {Promise<{ok: boolean, html?: string, error?: {status: number, code: string, message: string}}>}
+ */
+async function fetchHtml(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  const { url } = req.query;
-
-  // Validate URL
-  if (!url) {
-    return res.status(400).json({
-      success: false,
-      error: { code: "INVALID_URL", message: "URL parameter is required" },
-    });
-  }
-
-  let parsedUrl;
   try {
-    parsedUrl = new URL(url);
-  } catch {
-    return res.status(400).json({
-      success: false,
-      error: { code: "INVALID_URL", message: "URL must use HTTP or HTTPS" },
-    });
-  }
-
-  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-    return res.status(400).json({
-      success: false,
-      error: { code: "INVALID_URL", message: "URL must use HTTP or HTTPS" },
-    });
-  }
-
-  // Fetch the page with timeout
-  let html;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
     const response = await fetch(url, {
       headers: {
         "User-Agent": USER_AGENT,
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+        Accept: ACCEPT_HEADER,
+        "Accept-Language": ACCEPT_LANGUAGE,
       },
       signal: controller.signal,
     });
@@ -301,51 +271,94 @@ export default async function handler(req, res) {
     clearTimeout(timeout);
 
     if (response.status === 403) {
-      return res.status(403).json({
-        success: false,
-        error: { code: "BLOCKED", message: "Website blocked our request" },
-      });
+      return {
+        ok: false,
+        error: { status: 403, code: "BLOCKED", message: "Website blocked our request" },
+      };
     }
 
     if (!response.ok) {
-      return res.status(502).json({
-        success: false,
+      return {
+        ok: false,
         error: {
+          status: 502,
           code: "FETCH_FAILED",
           message: `Could not fetch the page (HTTP ${response.status})`,
         },
-      });
+      };
     }
 
-    html = await response.text();
-  } catch (err) {
-    if (err.name === "AbortError") {
-      return res.status(504).json({
-        success: false,
-        error: { code: "TIMEOUT", message: "Request timed out" },
-      });
+    // Validate content-type
+    const contentType = response.headers.get("content-type") || "";
+    if (
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml+xml")
+    ) {
+      return {
+        ok: false,
+        error: {
+          status: 400,
+          code: "INVALID_CONTENT_TYPE",
+          message: `Expected HTML but received ${contentType.split(";")[0] || "unknown"}`,
+        },
+      };
     }
-    return res.status(502).json({
+
+    return { ok: true, html: await response.text() };
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err.name === "AbortError") {
+      return {
+        ok: false,
+        error: { status: 504, code: "TIMEOUT", message: "Request timed out" },
+      };
+    }
+    return {
+      ok: false,
+      error: { status: 502, code: "FETCH_FAILED", message: "Could not fetch the page" },
+    };
+  }
+}
+
+/**
+ * Extract recipe from parsed HTML using JSON-LD or Microdata
+ * @param {CheerioAPI} $ - Cheerio instance
+ * @returns {object|null} - Raw recipe data or null
+ */
+function extractRecipe($) {
+  // Try JSON-LD first (primary method)
+  const jsonLdBlocks = extractJsonLd($);
+  for (const block of jsonLdBlocks) {
+    const recipe = findRecipeInJsonLd(block);
+    if (recipe) return recipe;
+  }
+
+  // Fall back to Microdata
+  return extractMicrodata($);
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({
       success: false,
-      error: { code: "FETCH_FAILED", message: "Could not fetch the page" },
+      error: { code: "METHOD_NOT_ALLOWED", message: "Only GET requests allowed" },
     });
   }
 
-  // Parse HTML and extract recipe data
-  const $ = cheerio.load(html);
-
-  // Try JSON-LD first (primary method)
-  const jsonLdBlocks = extractJsonLd($);
-  let recipe = null;
-  for (const block of jsonLdBlocks) {
-    recipe = findRecipeInJsonLd(block);
-    if (recipe) break;
+  const urlValidation = validateUrl(req.query.url);
+  if (!urlValidation.valid) {
+    return res.status(400).json({ success: false, error: urlValidation.error });
   }
 
-  // Fall back to Microdata if no JSON-LD found
-  if (!recipe) {
-    recipe = extractMicrodata($);
+  const fetchResult = await fetchHtml(req.query.url);
+  if (!fetchResult.ok) {
+    return res
+      .status(fetchResult.error.status)
+      .json({ success: false, error: { code: fetchResult.error.code, message: fetchResult.error.message } });
   }
+
+  const $ = cheerio.load(fetchResult.html);
+  const recipe = extractRecipe($);
 
   if (!recipe) {
     return res.status(404).json({
@@ -359,3 +372,61 @@ export default async function handler(req, res) {
     recipe: normalizeRecipe(recipe),
   });
 }
+
+/**
+ * Validate URL parameter
+ * @param {string|undefined} url - URL to validate
+ * @returns {{valid: boolean, parsedUrl?: URL, error?: {code: string, message: string}}}
+ */
+function validateUrl(url) {
+  if (!url) {
+    return {
+      valid: false,
+      error: { code: "INVALID_URL", message: "URL parameter is required" },
+    };
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return {
+      valid: false,
+      error: { code: "INVALID_URL", message: "URL must use HTTP or HTTPS" },
+    };
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    return {
+      valid: false,
+      error: { code: "INVALID_URL", message: "URL must use HTTP or HTTPS" },
+    };
+  }
+
+  return { valid: true, parsedUrl };
+}
+
+/**
+ * Normalize servings from various formats
+ * @param {string|number|Array|null} recipeYield - Raw servings value
+ * @returns {string|null} - Normalized servings string
+ */
+function normalizeServings(recipeYield) {
+  if (!recipeYield) return null;
+  if (typeof recipeYield === "string") return recipeYield;
+  if (Array.isArray(recipeYield)) return recipeYield[0];
+  if (typeof recipeYield === "number") return `${recipeYield} servings`;
+  return null;
+}
+
+// Named exports for testing
+export {
+  formatDuration,
+  parseServings,
+  ingredientToString,
+  normalizeStep,
+  extractImage,
+  findRecipeInJsonLd,
+  validateUrl,
+  normalizeServings,
+};
